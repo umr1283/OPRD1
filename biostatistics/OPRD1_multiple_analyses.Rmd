@@ -1,0 +1,465 @@
+---
+title: 'OPRD1 Report'
+author: 'Mathilde Boissel'
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+monofont: 'Source Code Pro'
+monofontoptions: "Scale=0.7"
+params:
+  output_code: FALSE
+  cache: FALSE
+  dpi: 90
+  gg_fontsize: 9
+output:
+  bookdown::html_document2:
+    theme: simplex
+    toc: true
+    toc_depth: 4
+    toc_float: 
+      collapsed: false
+    fig_width: 6.3
+    fig_height: 4.7
+    number_sections: true
+    self_contained: true
+    mathjax: default
+  pdf_document:
+    df_print: kable
+    fig_height: 4.7
+    fig_width: 6.3
+    latex_engine: pdflatex
+    number_sections: true
+    toc: true
+    toc_depth: 4
+    keep_tex: true
+references:
+- id: sun_unified_2013
+  title: A Unified Mixed-Effects Model for Rare-Variant Association in Sequencing Studies
+  author:
+  - family: Sun
+    given: Jianping
+  - family: Zheng
+    given: Yingye
+  - family: Hsu
+    given: Li
+  container-title: Genetic Epidemiology
+  volume: 37
+  URL: 'http://dx.doi.org/10.1002/gepi.21717'
+  DOI: 10.1002/gepi.21717
+  issue: 4
+  number: 4
+  issn: 07410395
+  publisher: Wiley
+  page: 334--344
+  type: article-journal
+  issued:
+    year: 2013
+    month: 3
+    day: 9
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+options(stringsAsFactors = FALSE)
+
+project_directory <- "/disks/PROJECT/OPRD1"
+
+### Load packages and functions
+library(parallel)
+library(grid)
+library(scales)
+library(readxl)
+library(ggrepel)
+library(Hmisc)
+library(kableExtra)
+library(knitr)
+library(DT)
+library(tidyverse)
+
+### Source MC's functions
+source(paste0(project_directory, "/Scripts/utils/format_pval.R"))
+source(paste0(project_directory, "/Scripts/utils/ggmanhattan.R"))
+source(paste0(project_directory, "/Scripts/utils/hijack.R"))
+source(paste0(project_directory, "/Scripts/utils/pretty_kable.R"))
+
+### Set knitr rmarkdown chunk options
+knitr::opts_chunk$set(
+  results = "asis",
+  size = "small",
+  include = TRUE,
+  echo = params$output_code,
+  warning = params$output_code,
+  message = params$output_code,
+  tidy = FALSE,
+  crop = TRUE,
+  autodep = TRUE,
+  fig.align = "center",
+  fig.pos = "!h",
+  dpi = params$dpi,
+  fig.path = paste0(tempdir(), "/cache/"),
+  cache = params$cache,
+  cache.path = paste0(tempdir(), "/cache/")
+)
+
+### Define theme
+theme_set(theme_light(base_size = params$gg_fontsize))
+scale_colour_viridis_d <- hijack(scale_colour_viridis_d, option = "plasma", begin = 0, end = 4 / 5)
+scale_colour_viridis_c <- hijack(scale_colour_viridis_c, option = "plasma", begin = 0, end = 4 / 5)
+scale_fill_viridis_d <- hijack(scale_fill_viridis_d, option = "plasma", begin = 0, end = 4 / 5)
+scale_fill_viridis_c <- hijack(scale_fill_viridis_c, option = "plasma", begin = 0, end = 4 / 5)
+viridis_pal <- hijack(viridis_pal, option = "plasma", begin = 0, end = 4 / 5)
+
+
+knitr::opts_chunk$set(echo = FALSE)
+
+project_directory <- "/disks/PROJECT/OPRD1"
+Gene_to_run <- "OPRD1"
+ENST_to_run <- "ENST00000234961"
+SNP_INDEL <- "BOTH"
+output_dir <- "/disks/PROJECT/OPRD1/Data/OPRD1_multiple_analyses"
+
+Analyses_plan <- read_excel(
+  path = "/disks/PROJECT/OPRD1/Docs/Analyses_plan_OPRD1.xlsx", 
+  col_names = TRUE,
+  na = "NA",
+) %>% 
+  mutate(Binaire = as.logical(Binaire)) %>% 
+  select(Model, Version, everything()) %>% 
+  arrange(Binaire, Commentaire)
+
+PhenotypeDir <- "/phenotypes_data/"
+Phenotype_file <- paste0(PhenotypeDir, "Phenotyes_latest.xlsx")
+Pheno_OPRD1 <- "/disks/PROJECT/OPRD1/Docs/OPRD1-pheno.xlsx"
+
+Phenotypes <- read_excel(
+  path = Phenotype_file,
+  col_names = TRUE,
+  na = "NA",
+  guess_max = 9365
+) %>%
+  as.data.frame()
+rownames(Phenotypes) <- paste(Phenotypes$RUN, Phenotypes$ID, sep = "_")
+  
+#### Load specifiq phenotype for OPRD1 abalyses #### ----here
+Phenotypes_OPRD1 <- read_excel(
+  path = Pheno_OPRD1, 
+  col_names = TRUE,
+  na = "NA",
+  guess_max = 9365
+) %>%
+  as.data.frame() %>% 
+  mutate(ADN = as.character(ADN))
+
+#### Update Phenotypes /!\ 
+Phenotypes <- Phenotypes %>% 
+  filter(ADN %in% Phenotypes_OPRD1$ADN) %>% 
+  select(-names(Phenotypes_OPRD1)[names(Phenotypes_OPRD1)%in% names(Phenotypes)][-1]) %>% 
+  left_join(x = ., y = Phenotypes_OPRD1, by = "ADN") %>% 
+  mutate(
+    age = AGE_D0, 
+    sex = SEX, ## must be a numeric in the MiST matrix 
+    CC_OWT = `CC-OWT`, 
+    CC_OBESITE_avecINFODIAB = CC_OBESITE, 
+    FG = FG_D0, 
+    FI = FI_D0, 
+    LN_FI = log(x = FI),
+    HOMA2B = HOMA2B_D0, 
+    LN_HOMA2B = log(x = HOMA2B_D0), 
+    HOMA2IR = HOMA2IR_D0,
+    LN_HOMA2IR = log(x = HOMA2IR_D0), 
+    HDL = `HDL-sansTTT`, 
+    TG = `TG-sansTTT`, 
+    LN_TG = log(x = `TG-sansTTT`), 
+    PAS = `PAS-sansTTT`, 
+    PAD = `PAD-sansTTT`, 
+    CC_MS_sansBMI = CC_MS, 
+    LN_BMI = log(BMI)
+  ) 
+```
+
+
+# Phenotypes
+
+The phenotype file: ``r basename(Pheno_OPRD1)``.  
+When longitudinal values were available, the baseline value "_D0" were used.  
+
+
+```{r Phenotypes}
+# All density and table counts 
+tmp <- Phenotypes %>%
+  mutate_at(
+    .vars = vars(unique(Analyses_plan$Y[Analyses_plan$Binaire])),
+    .funs = function(.x) as.factor(as.character(.x))
+  )
+
+y_interest <- unique(Analyses_plan$Y)
+y_interest <- y_interest[-grep("_avec|_sans", y_interest)]
+y_trans <- y_interest[grep("LN_", y_interest)]
+y_interest <- y_interest[!y_interest %in% y_trans]
+y_pairs <- c(matrix(data = c(y_trans, gsub("LN_", "", y_trans)), nrow = 2, byrow = TRUE))
+y_interest <- unique(c(
+  sort(y_interest), 
+  y_pairs
+))
+
+cat("## Countinuous variables \n")
+
+numeric_var <- names(dplyr::select_if(tmp, is.numeric))
+for (ivar in intersect(y_interest[y_interest %in% numeric_var], y_interest[!y_interest %in% y_pairs])) {
+  tmp_i <- tmp %>% 
+    select(all_of(ivar)) %>% 
+    pivot_longer(cols = all_of(ivar)) 
+  (ggplot(data = tmp_i, mapping = aes(x = value)) + 
+    geom_density(aes(y = ..count..)) +
+    facet_wrap(facets = vars(name), scales = "free") ## same style than pairs here under
+  ) %>% print()
+  cat("\n\n")
+} 
+for (ivar in y_trans) {
+  y_both <- grep(gsub("LN_", "", ivar), y_pairs)
+  tmp_i <- tmp %>% 
+    select(all_of(y_pairs[y_both])) %>% 
+    pivot_longer(cols = y_pairs[y_both])
+  if(ivar %in% "LN_TG") {
+    tmp_i$name <- factor(x = tmp_i$name, levels = c("TG", "LN_TG")) ## reorder
+  }
+  (ggplot(data = tmp_i, mapping = aes(x = value)) + 
+    geom_density(aes(y = ..count..)) +
+    facet_wrap(facets = vars(name), scales = "free")
+  ) %>% print()
+  cat("\n\n")
+}
+
+cat("## Binary variables \n")
+
+fac_var <- names(dplyr::select_if(tmp, is.factor))
+for (ivar in sort(fac_var[fac_var %in% y_interest])) { 
+  with(tmp, table(get(ivar), useNA = "always")) %>% 
+    as.data.frame() %>% 
+    `colnames<-`(c(ivar, "Count")) %>% 
+    (function(dt) {
+      pretty_kable(data = dt, row.names = FALSE, align = "c", full_width = FALSE) 
+      cat("\n")
+    }) %>%
+    invisible()
+}
+cat("\n\n")
+```
+
+# Analysis
+
+Rare variants have been analysed with the method *MiST* [@sun_unified_2013].  
+All variants are analysed as a single cluster (at the gene scale) without subcluster based on mutation's type.  
+This method provides a score $\pi$ which represents the mean effect of the cluster and a score $\tau$ which represents the heterogeneous effect of the cluster.  
+The overall p-value tests the association between the set of variants and the trait of interest.  
+
+Let the equation of the model be: $Y = \alpha X + \hat{\pi} GZ$, where  
+
+$Y$ is the phenotype matrix (n x 1) for n individuals,  
+$X$ is the matrix of covariates (n x p) with p covariates,  
+$Z$ is a vector of q ones for the q variants and  
+$G$ is the genotype matrix (n x q) coded 0, 1 and 2 for AA, Aa, aa, where A is a major allele and a is a minor allele.  
+
+MiST analyses have been performed, separately, according sub-group of variants, namely `GOF`, `LOF`, `LOFgene+LOFfunc` and `ALL` (ALL gathers GOF, LOF and Neutral).  
+
+Statistical analyses have been performed as follow :
+
+```{r analyses-plan, eval="asis"}
+kable(x = Analyses_plan %>% select(-Commentaire, -cmd), align = "c", format = "html", escape = FALSE, caption = "Analysis Plan") %>%
+  kable_styling(bootstrap_options = c("bordered", "condensed", "responsive", "striped"), full_width = FALSE) %>%
+  column_spec(1, bold = TRUE) %>% 
+  collapse_rows(columns = 3:5)
+cat("\n\n")
+```
+
+
+# Results  
+
+```{r import_res, echo=FALSE}
+clinical_data_list <- lapply(X = list.files(path = output_dir, pattern = "clinicalData.RDS", full.names = TRUE), FUN = function(X){
+  tmp <- readRDS(file = X)
+  return(tmp)
+})
+names(clinical_data_list) <- basename(list.files(path = output_dir, pattern = "clinicalData.RDS", full.names = TRUE)) %>% gsub("_clinicalData.RDS", "", .)
+
+res_rare_df <- lapply(X = list.files(path = output_dir, pattern = "resRare.tsv", full.names = TRUE), FUN = function(X){
+  tmp <- read_tsv(
+    file = X, 
+    col_names = TRUE,
+    col_types = cols(
+      .default = col_double(), 
+      trait = col_character(),
+      covariates = col_character(),
+      error = col_character(),
+      SubClusters = col_character()
+    )
+  ) %>% 
+    mutate(
+      file = X, 
+      Version = gsub(output_dir, "", file) %>% 
+        gsub("/", "", .) %>% 
+        gsub("_resRare.tsv", "", .) %>% 
+        gsub(paste0(trait, "_"), "", .),  
+      file = NULL, 
+      SubClusters = NULL
+    ) 
+  return(tmp)
+}) %>% bind_rows() %>% 
+  arrange(trait, Version) %>% 
+  select(trait, covariates, Version, everything()) %>% 
+  select(-error, error)
+
+writexl::write_xlsx(
+  x = res_rare_df, 
+  path = paste0(output_dir, "/000-RESULTS.xlsx"), 
+  col_names = TRUE
+)
+```
+
+## Rare Variants 
+
+```{r resmist, eval="asis"}
+res_rare_df %>%  
+  mutate(covariates = gsub(";", " + ", covariates)) %>% 
+  select(c("trait", "covariates", "Version", "sample_size", "S.pi", "p.value.S.pi", 
+"S.tau", "p.value.S.tau", "p.value.overall","error")) %>% 
+  mutate(error = gsub("(\\[warning\\]|error)(.*)", "\\1", error)) %>% 
+  mutate_at(.vars = vars(p.value.S.pi, p.value.S.tau , p.value.overall), .funs = function(x) {
+    cell_spec(
+      formatC(x, digits = 4),
+      color = ifelse(x < 0.05, "white", "grey"),
+      background = ifelse(x < 0.05, "firebrick", "None"),
+      bold = ifelse(x < 0.05, TRUE, FALSE))
+  }) %>% 
+  mutate_if(.predicate = is.numeric, .funs = prettyNum, digits = 4) %>% 
+  kable(align = "c", format = "html", escape = FALSE, caption = "MiST results") %>%
+  kable_styling(bootstrap_options = c("bordered", "condensed", "responsive", "striped"), full_width = FALSE) %>%
+  column_spec(1, bold = TRUE) %>% 
+  collapse_rows(columns = 1:2)
+cat("\n\n")
+```
+
+```{r resrare, eval="asis"}
+res_rare_df %>%  
+  mutate(covariates = gsub(";", " + ", covariates)) %>% 
+  select(
+    c("trait", "covariates", "Version", "sample_size", 
+      "Pi_hat", "CI_2.5", "CI_97.5", "SE", "P_val", "OR", "nb_rare_var", "error")
+  ) %>% 
+  mutate(error = gsub("(\\[warning\\]|error)(.*)", "\\1", error)) %>% 
+  mutate_at(.vars = vars(P_val), .funs = function(x) {
+    cell_spec(
+      formatC(x, digits = 4),
+      color = ifelse(x < 0.05, "white", "grey"),
+      background = ifelse(x < 0.05, "firebrick", "None"),
+      bold = ifelse(x < 0.05, TRUE, FALSE))
+  }) %>% 
+  mutate_if(.predicate = is.numeric, .funs = prettyNum, digits = 4) %>% 
+  kable(align = "c", format = "html", escape = FALSE, caption = "Model Estimates") %>%
+  kable_styling(bootstrap_options = c("bordered", "condensed", "responsive", "striped"), full_width = FALSE) %>%
+  column_spec(1, bold = TRUE) %>% 
+  collapse_rows(columns = 1:2)
+cat("\n\n")
+```
+
+## Viz {.tabset}
+
+```{r viz, eval="asis"}
+for (itrait in unique(res_rare_df$trait)) {
+  cat(paste0("### ", itrait, " {-}\n"))
+  gg <- res_rare_df %>% 
+   filter(trait %in% itrait) %>% 
+    mutate(
+      Analyses = as.factor(paste0(trait, "_", Version)),
+      Sign = factor(x = ifelse(Pi_hat>0, "+", "-"), levels = c("+", "-"), labels = c("+", "-"))
+    ) %>% 
+    ggplot(data = ., mapping = aes(x = Pi_hat, y = Analyses, colour = Sign)) + 
+    geom_point(stat = "identity") + 
+    geom_errorbar(
+      mapping = aes(xmin = Pi_hat-SE, xmax = Pi_hat+SE),
+      width=.2, position=position_dodge(0.05)
+    ) + 
+    scale_color_manual(
+      aesthetics = "colour", 
+      name = "Sign",
+      label = list("+", "-"),
+      values = c(
+        "+" = "#E16462",  # "firebrick2", 
+        "-" = "#B12A90"
+      ), breaks = c("+", "-")
+    ) + 
+    facet_wrap(facets = vars(trait), ncol = 1)
+ print(gg)
+ cat("\n\n")
+}
+
+```
+
+## Clinical Data 
+
+```{r clinicalData, eval="asis"}
+all_analyses <- names(clinical_data_list)
+for (i in 1:length(all_analyses)) {
+
+  cat(paste0(
+    "### ",  
+    gsub("(.*)_([GOF|LOF|ALL|LOFgene+LOFfunc])", "\\1 \\2", all_analyses[i], perl = TRUE),
+  " \n"))
+  
+  clinDta <- clinical_data_list[i][[1]]
+
+  if(length(clinDta)>1) {
+    clinDta[[1]] %>% ## clinical data
+    as.data.frame() %>%
+    (function(dt) {
+      if (nrow(dt) == 0) {
+        cat("NOTE: No clinical data available!\n")
+        cat("\n")
+      } else {
+        pretty_kable(data = dt, row.names = FALSE, align = "c", full_width = FALSE) 
+        cat("\n")
+      }
+    }) %>%
+    invisible()
+    cat("\n\n")
+    
+    ## ggplot saved to includ 
+    ggtoinclud <- clinDta[[2]]
+    ggtoinclud %>% 
+      print()
+    cat("\n\n")
+    
+    clinDta[[3]] %>% ## nb mut caried
+    as.data.frame() %>%
+    (function(dt) {
+      if (nrow(dt) == 0) {
+        cat("NOTE: No clinical data available!\n")
+        cat("\n")
+      } else {
+        pretty_kable(data = dt, row.names = FALSE, align = "c", full_width = FALSE) 
+        cat("\n")
+      }
+    }) %>%
+    invisible()
+    cat("\n\n")
+  
+  } else {
+    clinDta %>% ## length == 1 (only ClinicalData df to show)
+    as.data.frame() %>%
+    (function(dt) {
+      if (nrow(dt) == 0) {
+        cat("NOTE: No clinical data available!\n")
+        cat("\n")
+      } else {
+        pretty_kable(data = dt, row.names = FALSE, align = "c", full_width = FALSE) 
+        cat("\n")
+      }
+    }) %>%
+    invisible()
+     cat("\n\n")
+  }
+}
+
+```
+
+
+# References
