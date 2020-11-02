@@ -1,0 +1,77 @@
+##########################
+### Configuration du run #
+##########################
+name	run_XXXX
+email	XXX@lXXX.fr
+user	XXXXXX
+disque	/media/Run
+nas	/path/XXX
+from	XXXXXX_XXXXXX_XXX_XXXXXXXXXXX
+samplesheet	run_XXXX_humain.csv
+logfile	/path/log/logstash/run_XXXX.log
+cluster	ocean 								#for grid computing
+
+reference	hg19
+genome_bwa	/path/hg19.fasta
+genome_gatk	/path/hg19.fasta
+
+cluster	ocean
+
+# si alternative_filter_cover ou bed_stat_cover/cover_xls_summary, rajouter un bed
+#bed XXXXXXXXXXXXXXXXXXXXXXXXX
+
+##############################
+### Configuration des étapes #
+##############################
+copie	1
+demultiplex_new_bcl	1
+group_fastq	1
+demultiplex_only	0
+
+align_new_bwa	1
+gatk_realign	1
+gatk_snp	1
+
+recup_gatk	1
+recup_cover	1
+filter_cover	1
+
+##optional
+alternative_filter_cover	0
+bed_stat_cover	0
+cover_xls_summary	0
+##
+
+ensembl_annot_snp	1
+ensembl_annot_indel	1
+coding_filter_snp	1
+coding_filter_indel	1
+
+report	1
+fastqc	1
+pdf	1
+
+hg19_pos_annot_snp	1
+hg19_pos_annot_indel	1
+dbsnp_annot_snp	1
+dbsnp_annot_indel	1
+CG_54genomes_annot_snp	1
+CG_54genomes_annot_indel	1
+expr_beta_annot_snp	1
+expr_beta_annot_indel	1
+good_annot_snp	1
+good_annot_indel	1
+dbnsfp_annot_snp	1
+indiv_annot_snp	1
+maf_annot_indel	1
+mut_indiv_insert	1
+base_count_snp	1
+base_count_indel	1
+disease_inher_snp	1
+disease_inher_indel	1
+
+link_fastq	1
+link_bam	1
+link_vcf	1
+link_stats	1
+link_annot	1
