@@ -12,7 +12,7 @@ The repository includes both [bioinformatics](bioinformatics) and [biostatistics
 
 The bioinformatics analysis was performed using the scripts in the [bioinformatics](bioinformatics) directory.
 
-# DNAseq
+### DNAseq
 The different analysis steps are listed in the plain text file [bioinformatics/template_analysis](bioinformatics/template_analysis), which is provided to the [bioinformatics/start_multiserveur.pl](bioinformatics/start_multiserveur.pl) script.  
 Then the [bioinformatics/start_sample.pl](bioinformatics/start_sample.pl) script is launched with all the different steps of the analysis.
 
@@ -26,7 +26,7 @@ Tools, captures and sequencing adaptors paths can be passed by the files in the 
 
 Perl version used is Perl 5, version 16, subversion 3 (v5.16.3) on CentOS Linux 7 (Core, x86_64).
 
-# RNAseq
+### RNAseq
 The different analysis steps are listed in the Nextflow script [bioinformatics/RnaSeqAnalysis.nf](bioinformatics/RnaSeqAnalysis.nf). A supplementary script [bioinformatics/rnaseq_add_genename.R](bioinformatics/rnaseq_add_genename.R) called during the analysis is also included.
 
 Nextflow version used is 20.04.1.5335, R version used is 3.6.3 (February, 2020) on Debian GNU/Linux 9 (stretch, x86_64).
