@@ -2,7 +2,7 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-This repository contains all code and scripts used to perform the analyses described in the paper "... OPRD1 ...".
+This repository contains all code and scripts used to perform the analyses described in the paper "Mirror effect of delta opioid receptor mutations on human metabolic homeostasis".
 
 The repository includes both [bioinformatics](bioinformatics) and [biostatistics](biostatistics) analyses.
 
